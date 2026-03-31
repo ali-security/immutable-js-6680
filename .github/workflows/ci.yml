@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: ['*']
+
+jobs:
+  test:
+    name: 'Smoke Test'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
+        with:
+          node-version: '8'
+      - name: Verify CVE fix
+        run: |
+          node -e "
+            var Immutable = require('./dist/immutable');
+            var Map = Immutable.Map;
+            var errors = [];
+
+            // Test 1: toObject prototype pollution
+            var m1 = Map({user: 'alice'}).set('__proto__', {admin: true});
+            if (m1.toObject().admin !== undefined) errors.push('toObject proto pollution');
+
+            // Test 2: toJS prototype pollution
+            if (m1.toJS().admin !== undefined) errors.push('toJS proto pollution');
+
+            // Test 3: mergeDeep prototype pollution
+            var merged = Immutable.fromJS({}).mergeDeep(JSON.parse('{\"__proto__\":{\"admin\":true}}'));
+            if (({}).admin !== undefined) errors.push('mergeDeep global proto pollution');
+
+            if (errors.length > 0) { console.error('FAILED:', errors); process.exit(1); }
+            console.log('CVE-2026-29063 fix verified: prototype pollution blocked');
+          "
